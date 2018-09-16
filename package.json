@@ -1,0 +1,31 @@
+{
+  "name": "erc721-rent",
+  "version": "0.0.0-semantic-release",
+  "description": "Smart contracts for Rent ERC721",
+  "main": "index.js",
+  "devDependencies": {
+    "babel-plugin-transform-object-rest-spread": "^6.26.0",
+    "babel-polyfill": "^6.26.0",
+    "babel-preset-env": "^1.7.0",
+    "chai": "^4.1.2",
+    "chai-as-promised": "^7.1.1",
+    "chai-bignumber": "^2.0.2",
+    "dotenv": "^6.0.0",
+    "ethereumjs-abi": "^0.6.5",
+    "ganache-cli": "^6.1.0",
+    "pre-commit": "^1.2.2",
+    "truffle": "^4.1.11",
+    "truffle-hdwallet-provider": "0.0.5"
+  },
+  "scripts": {
+    "test": "scripts/test.sh --exit"
+  },
+  "pre-commit": [
+    "test"
+  ],
+  "author": "Christian Hentschel",
+  "license": "ISC",
+  "dependencies": {
+    "openzeppelin-solidity": "^1.12.0"
+  }
+}
