@@ -12,7 +12,7 @@ contract FakeERC721Composable is FakeERC721 {
     FakeERC721("ERC721Composable", "ERC721C")
     { }
 
-    function _supportsInterface(bytes4 interfaceId) internal returns (bool) {
+    function supportsInterface(bytes4 interfaceId) external view returns (bool) {
         return interfaceId == InterfaceId_ValidateFingerprint;
     }
 
@@ -41,13 +41,22 @@ contract FakeERC721Composable is FakeERC721 {
       public
       returns (bool)
     {
-        return getFingerprint(composedId) == _bytesToBytes32(fingerprint);
+        return getFingerprint(composedId) == _bytesToBytes32(fingerprint, 0);
     }
 
-    function _bytesToBytes32(bytes _data) internal pure returns (bytes32 _output) {
+    function _bytesToBytes32_DEPRECARED(bytes _data) internal pure returns (bytes32 _output) {
         assembly {
             mstore(_output, add(_data, 0))
             mstore(add(_data, 32), add(_data, 32))
         }
+    }
+
+    function _bytesToBytes32(bytes b, uint offset) private pure returns (bytes32) {
+        bytes32 out;
+
+        for (uint i = 0; i < 32; i++) {
+            out |= bytes32(b[offset + i] & 0xFF) >> (i * 8);
+        }
+        return out;
     }
 }

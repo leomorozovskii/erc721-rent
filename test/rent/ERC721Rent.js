@@ -205,7 +205,40 @@ contract('rentplace', function([
       )
     })
 
-    it.skip('should not sign a token with an invalid fingerPrint', async function() {
+    it('should sign a rent with a invalid token fingerPrint', async function() {
+      this.timeout(999999999)
+      await createComposable(10)
+
+      await rentContract.createRent(
+        fakeERC721Composable.address,
+        mana.address,
+        composableId,
+        rate,
+        rentDuration,
+        endTime,
+        sentByTokenOwner
+      )
+
+      const fingerprint = await fakeERC721Composable.getFingerprint(
+        composableId
+      )
+
+      await rentContract.signRent(
+        fakeERC721Composable.address,
+        composableId,
+        rate,
+        fingerprint,
+        sentByTenant
+      )
+
+      const rent = await getRent(fakeERC721Composable.address, composableId)
+      expect(rent.tenant).to.equal(tenant)
+
+      const newOwner = await fakeERC721Composable.ownerOf(composableId)
+      expect(newOwner).to.equal(rentContract.address)
+    })
+
+    it('should not sign a rent with an invalid token fingerPrint', async function() {
       this.timeout(999999999)
       await createComposable(10)
 
@@ -229,7 +262,7 @@ contract('rentplace', function([
         )
       )
     })
-    it.skip('should not sign a token with an invalid fingerPrint by front-running', async function() {
+    it('should not sign a rent with an invalid token fingerPrint (front-running)', async function() {
       this.timeout(999999999)
       await createComposable(10)
 
@@ -246,7 +279,6 @@ contract('rentplace', function([
       const fingerprint = await fakeERC721Composable.getFingerprint(
         composableId
       )
-      console.log(fingerprint)
 
       await fakeERC721Composable.addTokens(composableId, [1])
 
