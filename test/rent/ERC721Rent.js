@@ -57,6 +57,37 @@ contract('rentplace', function([
     log.args._expiresAt.should.be.bignumber.equal(expiresAt)
   }
 
+  function checkRentSignedLog(log, tokenId, dueTime) {
+    log.event.should.be.equal('RentSigned')
+    log.args._tenant.should.be.equal(tenant)
+    log.args._nftAddress.should.be.equal(land.address)
+    log.args._tokenAddress.should.be.equal(mana.address)
+    log.args._tokenId.should.be.bignumber.equal(tokenId)
+    log.args._dueTime.should.be.bignumber.equal(dueTime)
+  }
+
+  function checkRentFinishedLog(log, tokenId) {
+    log.event.should.be.equal('RentFinished')
+    log.args._nftAddress.should.be.equal(land.address)
+    log.args._tokenAddress.should.be.equal(mana.address)
+    log.args._tokenId.should.be.bignumber.equal(tokenId)
+  }
+
+  function checkRentCancelledLog(log, tokenId) {
+    log.event.should.be.equal('RentCancelled')
+    log.args._nftAddress.should.be.equal(land.address)
+    log.args._tokenAddress.should.be.equal(mana.address)
+    log.args._tokenId.should.be.bignumber.equal(tokenId)
+  }
+
+  function checkTokenUpdatedLog(log, tokenId, uri) {
+    log.event.should.be.equal('TokenUpdated')
+    log.args._nftAddress.should.be.equal(land.address)
+    log.args._tokenAddress.should.be.equal(mana.address)
+    log.args._tokenId.should.be.bignumber.equal(tokenId)
+    log.args._uri.should.be.equal(uri)
+  }
+
   async function getRent(nftAddress, tokenId) {
     const rent = await rentContract.rentByTokenId(nftAddress, tokenId)
     return {
@@ -85,8 +116,10 @@ contract('rentplace', function([
     fakeERC721Composable = await ERC721ComposableToken.new(sentByCreator)
     rentContract = await ERC721Rent.new(sentByCreator)
 
-    // Set holder of the asset and aproved on registry
+    // Set tokenOwner of the assets and approve rent contract for all
     await land.mint(tokenOwner, landId)
+    await fakeERC721.mint(tokenOwner, fakeTokenId)
+
     await land.setApprovalForAll(rentContract.address, true, sentByTokenOwner)
     await fakeERC721.setApprovalForAll(
       rentContract.address,
@@ -94,13 +127,6 @@ contract('rentplace', function([
       sentByTokenOwner
     )
     await fakeERC721Composable.setApprovalForAll(
-      rentContract.address,
-      true,
-      sentByTokenOwner
-    )
-
-    await fakeERC721.mint(tokenOwner, fakeTokenId)
-    await fakeERC721.setApprovalForAll(
       rentContract.address,
       true,
       sentByTokenOwner
@@ -120,6 +146,7 @@ contract('rentplace', function([
   })
 
   describe('Create Rent', function() {
+    // TODO: more tests need it
     it('should create a Rent', async function() {
       const { logs } = await rentContract.createRent(
         land.address,
@@ -146,9 +173,113 @@ contract('rentplace', function([
       rent.expiresAt.should.be.bignumber.equal(endTime)
       rent.dueTime.should.be.bignumber.equal(0)
     })
+
+    it('should not create a Rent without rate', async function() {
+      await assertRevert(
+        rentContract.createRent(
+          land.address,
+          mana.address,
+          landId,
+          0,
+          rentDuration,
+          endTime,
+          sentByTokenOwner
+        )
+      )
+    })
+
+    it('should not create a Rent with no contract for nft address', async function() {
+      await assertRevert(
+        rentContract.createRent(
+          tokenOwner,
+          mana.address,
+          landId,
+          rate,
+          rentDuration,
+          endTime,
+          sentByTokenOwner
+        )
+      )
+    })
+
+    it('should not create a Rent with no contract for token address', async function() {
+      await assertRevert(
+        rentContract.createRent(
+          land.address,
+          tokenOwner,
+          landId,
+          rate,
+          rentDuration,
+          endTime,
+          sentByTokenOwner
+        )
+      )
+    })
+
+    it('should not create a Rent with invalid expired time', async function() {
+      await assertRevert(
+        rentContract.createRent(
+          land.address,
+          mana.address,
+          landId,
+          rate,
+          rentDuration,
+          web3.eth.getBlock('latest').timestamp,
+          sentByTokenOwner
+        )
+      )
+    })
+
+    it('should not create a Rent with invalid duration', async function() {
+      await assertRevert(
+        rentContract.createRent(
+          land.address,
+          mana.address,
+          landId,
+          rate,
+          3600,
+          endTime,
+          sentByTokenOwner
+        )
+      )
+    })
+
+    it('should not create a Rent with a not approved token', async function() {
+      await land.setApprovalForAll(
+        rentContract.address,
+        false,
+        sentByTokenOwner
+      )
+
+      await assertRevert(
+        rentContract.createRent(
+          land.address,
+          mana.address,
+          landId,
+          rate,
+          rentDuration,
+          endTime,
+          sentByTokenOwner
+        )
+      )
+    })
+
+    it('should not create a Rent by hacker', async function() {
+      await assertRevert(
+        rentContract.createRent(
+          land.address,
+          mana.address,
+          landId,
+          rate,
+          rentDuration,
+          endTime,
+          sentByHacker
+        )
+      )
+    })
   })
 
-  describe.only('Sign Rent', function() {
+  describe('Sign Rent', function() {
     it('should sign a Rent', async function() {
       await rentContract.createRent(
         land.address,
@@ -173,6 +304,11 @@ contract('rentplace', function([
         '',
         sentByTenant
       )
+
+      // Event emitted
+      logs.length.should.be.equal(1)
+      const dueTime = web3.eth.getBlock('latest').timestamp + rentDuration
+      checkRentSignedLog(logs[0], landId, dueTime)
 
       // Owner of the token should be the rentContract
       const rent = await getRent(land.address, landId)
@@ -292,6 +428,65 @@ contract('rentplace', function([
         )
       )
     })
+
+    it('should not sign a Rent with insufficient funds', async function() {
+      await rentContract.createRent(
+        land.address,
+        mana.address,
+        landId,
+        rate,
+        rentDuration,
+        endTime,
+        sentByTokenOwner
+      )
+
+      // different rate
+      await assertRevert(
+        rentContract.signRent(
+          land.address,
+          landId,
+          rate * 0.9,
+          '',
+          sentByTenant
+        )
+      )
+
+      await rentContract.createRent(
+        land.address,
+        mana.address,
+        landId,
+        initialBalance * 1.1,
+        rentDuration,
+        endTime,
+        sentByTokenOwner
+      )
+
+      // insuficient funds
+      await assertRevert(
+        rentContract.signRent(
+          land.address,
+          landId,
+          initialBalance * 1.1,
+          '',
+          sentByTenant
+        )
+      )
+
+      await rentContract.createRent(
+        land.address,
+        fakeToken.address,
+        landId,
+        rate,
+        rentDuration,
+        endTime,
+        sentByTokenOwner
+      )
+
+      // no founds
+      await assertRevert(
+        rentContract.signRent(land.address, landId, rate, '', sentByTenant)
+      )
+    })
   })
 
   describe('finish Rent', function() {
@@ -312,7 +507,15 @@ contract('rentplace', function([
       let owner = await land.ownerOf(landId)
       expect(owner).to.equal(rentContract.address)
 
-      await rentContract.finishRent(land.address, landId, sentByTokenOwner)
+      const { logs } = await rentContract.finishRent(
+        land.address,
+        landId,
+        sentByTokenOwner
+      )
+
+      // Event emitted
+      logs.length.should.be.equal(1)
+      checkRentFinishedLog(logs[0], landId)
 
       owner = await land.ownerOf(landId)
       expect(owner).to.equal(tokenOwner)
@@ -373,7 +576,16 @@ contract('rentplace', function([
       let data = await land.tokenURI(landId)
       expect(data).to.equal('')
 
-      await rentContract.update(land.address, landId, tokenUri, sentByTenant)
+      const { logs } = await rentContract.updateToken(
+        land.address,
+        landId,
+        tokenUri,
+        sentByTenant
+      )
+
+      // Event emitted
+      logs.length.should.be.equal(1)
+      checkTokenUpdatedLog(logs[0], landId, tokenUri)
 
       data = await land.tokenURI(landId)
       expect(data).to.equal(tokenUri)
@@ -394,7 +606,7 @@ contract('rentplace', function([
       await increaseTime(rentDuration + 1)
 
       await assertRevert(
-        rentContract.update(land.address, landId, tokenUri, sentByTenant)
+        rentContract.updateToken(land.address, landId, tokenUri, sentByTenant)
       )
     })
 
@@ -412,7 +624,12 @@ contract('rentplace', function([
       await rentContract.signRent(land.address, landId, rate, '', sentByTenant)
 
       await assertRevert(
-        rentContract.update(land.address, landId, tokenUri, sentByTokenOwner)
+        rentContract.updateToken(
+          land.address,
+          landId,
+          tokenUri,
+          sentByTokenOwner
+        )
       )
     })
 
@@ -430,7 +647,7 @@ contract('rentplace', function([
       await rentContract.signRent(land.address, landId, rate, '', sentByTenant)
 
       await assertRevert(
-        rentContract.update(land.address, landId, tokenUri, sentByHacker)
+        rentContract.updateToken(land.address, landId, tokenUri, sentByHacker)
       )
     })
 
@@ -446,13 +663,13 @@ contract('rentplace', function([
       )
 
       await assertRevert(
-        rentContract.update(land.address, landId, tokenUri, sentByHacker)
+        rentContract.updateToken(land.address, landId, tokenUri, sentByHacker)
       )
     })
 
     it('should not allow update token not being rent', async function() {
       await assertRevert(
-        rentContract.update(land.address, landId, tokenUri, sentByHacker)
+        rentContract.updateToken(land.address, landId, tokenUri, sentByHacker)
       )
     })
   })
@@ -469,7 +686,14 @@ contract('rentplace', function([
         sentByTokenOwner
       )
 
-      await rentContract.cancelRent(land.address, landId, sentByTokenOwner)
+      const { logs } = await rentContract.cancelRent(
+        land.address,
+        landId,
+        sentByTokenOwner
+      )
+      // Event emitted
+      logs.length.should.be.equal(1)
+      checkRentCancelledLog(logs[0], landId)
 
       const rent = await getRent(land.address, landId)
 

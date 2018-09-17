@@ -178,8 +178,6 @@ contract ERC721Rent is Ownable, Pausable {
         }
 
         ERC20Interface erc20Token = ERC20Interface(rent.tokenAddress);
-
-        //TODO: check get data for token modifications
       
         // token is now part of the rent contract
         nftRegistry.transferFrom(rent.owner, address(this), tokenId);
@@ -199,12 +197,7 @@ contract ERC721Rent is Ownable, Pausable {
   
     
   
-    function finishRent(
-        address nftAddress,
-        uint256 tokenId
-    )
-      public
-    {
+    function finishRent(address nftAddress, uint256 tokenId) public {
         Rent memory rent = rentByTokenId[nftAddress][tokenId];
 
         ERC721Interface nftRegistry = ERC721Interface(nftAddress);
@@ -218,7 +211,7 @@ contract ERC721Rent is Ownable, Pausable {
         emit RentFinished(nftAddress, rent.tokenAddress, tokenId);
     }
   
-    function update(address nftAddress, uint256 tokenId, string uri) public {
+    function updateToken(address nftAddress, uint256 tokenId, string tokenUri) public {
         Rent memory rent = rentByTokenId[nftAddress][tokenId];
         
         require(rent.id != 0, "Token not listed for rent");
@@ -229,8 +222,8 @@ contract ERC721Rent is Ownable, Pausable {
         address tokenOwner = nftRegistry.ownerOf(tokenId);
 
         require(address(this) == tokenOwner, "");
-        nftRegistry.update(tokenId, uri);
+        nftRegistry.update(tokenId, tokenUri);
         
-        emit TokenUpdated(nftAddress, rent.tokenAddress, tokenId, uri);
+        emit TokenUpdated(nftAddress, rent.tokenAddress, tokenId, tokenUri);
     }
 }
